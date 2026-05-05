@@ -254,6 +254,27 @@
   .a-total span:last-child { font-family: var(--mono); font-weight: 600; color: var(--accent2); font-size: 15px; }
 
   .divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+  .btn-csv {
+    width: 100%;
+    padding: 13px;
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 500;
+    border: 1px dashed rgba(165,148,255,0.4);
+    border-radius: 14px;
+    background: transparent;
+    color: var(--accent2);
+    cursor: pointer;
+    transition: all .2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 6px;
+  }
+  .btn-csv:active { opacity: .7; transform: scale(.97); }
+  .btn-csv svg { width: 16px; height: 16px; flex-shrink: 0; }
 </style>
 </head>
 <body>
@@ -298,6 +319,10 @@
 <div class="screen" id="historico">
   <div class="section-label">Todas as aulas</div>
   <div id="lista-historico"></div>
+  <button class="btn-csv" onclick="exportarCSV('tudo')" style="margin-top:16px">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    Exportar tudo em CSV
+  </button>
 </div>
 
 <!-- RELATÓRIO -->
@@ -314,6 +339,7 @@
   </div>
   <button class="btn btn-outline" onclick="gerarRelatorio()" style="margin-top:12px;margin-bottom:20px">Gerar relatório</button>
   <div id="resultado-relatorio"></div>
+  <div id="csv-periodo-btn"></div>
 </div>
 
 <script>
@@ -381,7 +407,43 @@ function fmtData(s){const[y,m,d]=s.split('-');return`${d}/${m}/${y}`}
 function fmtVal(n){return Number(n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 
-function gerarRelatorio(){
+function exportarCSV(modo){
+  let dados=load();
+  let nomeArquivo='aulas_todas.csv';
+
+  if(modo==='periodo'){
+    const de=document.getElementById('de').value;
+    const ate=document.getElementById('ate').value;
+    if(!de||!ate){toast('Gere o relatório primeiro',true);return}
+    dados=dados.filter(a=>a.data>=de&&a.data<=ate);
+    nomeArquivo=`aulas_${de}_${ate}.csv`;
+  }
+
+  if(!dados.length){toast('Nenhuma aula para exportar',true);return}
+
+  const header='Data,Aluno,Horas,Valor por Hora (R$),Total (R$)';
+  const linhas=dados
+    .sort((a,b)=>a.data.localeCompare(b.data))
+    .map(a=>[
+      fmtData(a.data),
+      `"${a.aluno.replace(/"/g,'""')}"`,
+      a.horas,
+      a.valor.toFixed(2).replace('.',','),
+      a.total.toFixed(2).replace('.',',')
+    ].join(';'));
+
+  const csv='\uFEFF'+header+'\n'+linhas.join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement('a');
+  link.href=url;
+  link.download=nomeArquivo;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  toast('CSV baixado!');
+}
   const de=document.getElementById('de').value;
   const ate=document.getElementById('ate').value;
   if(!de||!ate){toast('Escolha o período',true);return}
@@ -426,6 +488,13 @@ function gerarRelatorio(){
     <div class="divider"></div>
     <div class="section-label">Por aluno</div>
     ${alunosHtml}
+  `;
+
+  document.getElementById('csv-periodo-btn').innerHTML=`
+    <button class="btn-csv" onclick="exportarCSV('periodo')" style="margin-top:8px;margin-bottom:20px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Exportar período em CSV
+    </button>
   `;
 }
 
