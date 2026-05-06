@@ -22,6 +22,7 @@
     --muted: #8887a8;
     --success: #4ade80;
     --danger: #f87171;
+    --whats: #25d366;
     --mono: 'DM Mono', monospace;
     --sans: 'DM Sans', sans-serif;
   }
@@ -147,6 +148,27 @@
   }
   .btn-csv:active { opacity: .7; transform: scale(.97); }
   .btn-csv svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+  .btn-whats {
+    width: 100%;
+    padding: 11px;
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 500;
+    border: 1px solid rgba(37,211,102,0.35);
+    border-radius: 10px;
+    background: rgba(37,211,102,0.08);
+    color: var(--whats);
+    cursor: pointer;
+    transition: all .2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    margin-top: 10px;
+  }
+  .btn-whats:active { opacity: .7; transform: scale(.97); }
+  .btn-whats svg { width: 16px; height: 16px; flex-shrink: 0; }
 
   .toast {
     position: fixed;
@@ -325,9 +347,28 @@ function deletar(id) {
   toast('Registro removido');
 }
 
-function fmtData(s) { const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; }
+function fmtData(s) { const [y, m, d] = s.split('-'); return d + '/' + m + '/' + y; }
 function fmtVal(n) { return Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function nomeMes(de) {
+  const meses = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  const [y, m] = de.split('-');
+  return meses[parseInt(m, 10) - 1] + '/' + y;
+}
+
+function enviarWhatsApp(nome, horas, aulas, total, periodo) {
+  const msg =
+    'Olá, ' + nome + '! 👋\n\n' +
+    'Segue o resumo das suas aulas em *' + periodo + '*:\n\n' +
+    '📚 Aulas realizadas: *' + aulas + '*\n' +
+    '⏱ Total de horas: *' + horas + 'h*\n' +
+    '💰 Valor total: *R$ ' + fmtVal(total) + '*\n\n' +
+    'Qualquer dúvida, estou à disposição! 😊';
+
+  const url = 'https://wa.me/?text=' + encodeURIComponent(msg);
+  window.open(url, '_blank');
+}
 
 function exportarCSV(modo) {
   let dados = load();
@@ -379,14 +420,17 @@ function gerarRelatorio() {
 
   const totalGeral = d.reduce((s, a) => s + a.total, 0);
   const totalHoras = d.reduce((s, a) => s + a.horas, 0);
+  const periodo    = nomeMes(de);
 
   const porAluno = {};
   d.forEach(a => {
-    if (!porAluno[a.aluno]) porAluno[a.aluno] = { horas: 0, total: 0, aulas: [] };
+    if (!porAluno[a.aluno]) porAluno[a.aluno] = { horas: 0, total: 0, count: 0 };
     porAluno[a.aluno].horas += a.horas;
     porAluno[a.aluno].total += a.total;
-    porAluno[a.aluno].aulas.push(a);
+    porAluno[a.aluno].count += 1;
   });
+
+  const iconeWhats = `<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.528 5.855L.057 23.454a.75.75 0 0 0 .908.944l5.878-1.533A11.942 11.942 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.75a9.713 9.713 0 0 1-4.953-1.355l-.355-.21-3.673.958.993-3.53-.231-.364A9.712 9.712 0 0 1 2.25 12C2.25 6.615 6.615 2.25 12 2.25S21.75 6.615 21.75 12 17.385 21.75 12 21.75z"/></svg>`;
 
   const alunosHtml = Object.entries(porAluno)
     .sort((a, b) => b[1].total - a[1].total)
@@ -394,8 +438,11 @@ function gerarRelatorio() {
       <div class="aluno-block">
         <div class="a-nome">${esc(nome)}</div>
         <div class="a-linha"><span>Horas de aula</span><span>${v.horas}h</span></div>
-        <div class="a-linha"><span>Aulas realizadas</span><span>${v.aulas.length}</span></div>
+        <div class="a-linha"><span>Aulas realizadas</span><span>${v.count}</span></div>
         <div class="a-total"><span>Total devido</span><span>R$${fmtVal(v.total)}</span></div>
+        <button class="btn-whats" onclick="enviarWhatsApp('${esc(nome)}', ${v.horas}, ${v.count}, ${v.total}, '${periodo}')">
+          ${iconeWhats} Enviar cobrança pelo WhatsApp
+        </button>
       </div>
     `).join('');
 
