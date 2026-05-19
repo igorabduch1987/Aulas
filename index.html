@@ -108,6 +108,30 @@
   .field input::placeholder { color: var(--muted); }
   input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1) opacity(.3); }
 
+  /* AUTOCOMPLETE */
+  .autocomplete-wrap { position: relative; }
+  .autocomplete-list {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: #22223a;
+    border: 1px solid var(--border2);
+    border-radius: 12px;
+    overflow: hidden;
+    z-index: 100;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .autocomplete-item {
+    padding: 13px 14px;
+    font-size: 15px;
+    cursor: pointer;
+    transition: background .15s;
+    border-bottom: 1px solid var(--border);
+  }
+  .autocomplete-item:last-child { border-bottom: none; }
+  .autocomplete-item:active { background: rgba(124,111,255,0.2); }
+
   .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
   .btn {
@@ -244,7 +268,10 @@
   </div>
   <div class="field">
     <label>Nome do aluno</label>
-    <input type="text" id="aluno" placeholder="Ex: João Silva" autocomplete="off"/>
+    <div class="autocomplete-wrap">
+      <input type="text" id="aluno" placeholder="Ex: João Silva" autocomplete="off" oninput="acInput()" onblur="acBlur()"/>
+      <div class="autocomplete-list" id="ac-list" style="display:none"></div>
+    </div>
   </div>
   <div class="row2">
     <div class="field">
@@ -290,6 +317,35 @@
 const DB = 'prof_aulas_v2';
 function load() { try { return JSON.parse(localStorage.getItem(DB) || '[]'); } catch(e) { return []; } }
 function save(d) { localStorage.setItem(DB, JSON.stringify(d)); }
+
+function getAlunos() {
+  const nomes = [...new Set(load().map(a => a.aluno))].sort();
+  return nomes;
+}
+
+// AUTOCOMPLETE
+function acInput() {
+  const input = document.getElementById('aluno');
+  const list  = document.getElementById('ac-list');
+  const val   = input.value.trim().toLowerCase();
+  if (!val) { list.style.display = 'none'; return; }
+  const matches = getAlunos().filter(n => n.toLowerCase().includes(val));
+  if (!matches.length) { list.style.display = 'none'; return; }
+  list.innerHTML = matches.map(n =>
+    '<div class="autocomplete-item" onmousedown="acSelect(\'' + n.replace(/'/g, "\\'") + '\')">' + esc(n) + '</div>'
+  ).join('');
+  list.style.display = 'block';
+}
+
+function acSelect(nome) {
+  document.getElementById('aluno').value = nome;
+  document.getElementById('ac-list').style.display = 'none';
+  document.getElementById('horas').focus();
+}
+
+function acBlur() {
+  setTimeout(() => { document.getElementById('ac-list').style.display = 'none'; }, 150);
+}
 
 function go(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -365,15 +421,12 @@ function enviarWhatsApp(nome, horas, aulas, total, periodo) {
     '⏱ Total de horas: *' + horas + 'h*\n' +
     '💰 Valor total: *R$ ' + fmtVal(total) + '*\n\n' +
     'Qualquer dúvida, estou à disposição! 😊';
-
-  const url = 'https://wa.me/?text=' + encodeURIComponent(msg);
-  window.open(url, '_blank');
+  window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
 }
 
 function exportarCSV(modo) {
   let dados = load();
   let nomeArquivo = 'aulas_todas.csv';
-
   if (modo === 'periodo') {
     const de  = document.getElementById('de').value;
     const ate = document.getElementById('ate').value;
@@ -381,9 +434,7 @@ function exportarCSV(modo) {
     dados = dados.filter(a => a.data >= de && a.data <= ate);
     nomeArquivo = 'aulas_' + de + '_' + ate + '.csv';
   }
-
   if (!dados.length) { toast('Nenhuma aula para exportar', true); return; }
-
   const header = 'Data;Aluno;Horas;Valor por Hora (R$);Total (R$)';
   const linhas = dados
     .sort((a, b) => a.data.localeCompare(b.data))
@@ -394,7 +445,6 @@ function exportarCSV(modo) {
       a.valor.toFixed(2).replace('.', ','),
       a.total.toFixed(2).replace('.', ',')
     ].join(';'));
-
   const csv  = '\uFEFF' + header + '\n' + linhas.join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
@@ -412,10 +462,8 @@ function gerarRelatorio() {
   const de  = document.getElementById('de').value;
   const ate = document.getElementById('ate').value;
   if (!de || !ate) { toast('Escolha o período', true); return; }
-
   const d  = load().filter(a => a.data >= de && a.data <= ate);
   const el = document.getElementById('resultado-relatorio');
-
   if (!d.length) { el.innerHTML = '<div class="empty">nenhuma aula no período</div>'; return; }
 
   const totalGeral = d.reduce((s, a) => s + a.total, 0);
@@ -430,7 +478,7 @@ function gerarRelatorio() {
     porAluno[a.aluno].count += 1;
   });
 
-  const iconeWhats = `<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.528 5.855L.057 23.454a.75.75 0 0 0 .908.944l5.878-1.533A11.942 11.942 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.75a9.713 9.713 0 0 1-4.953-1.355l-.355-.21-3.673.958.993-3.53-.231-.364A9.712 9.712 0 0 1 2.25 12C2.25 6.615 6.615 2.25 12 2.25S21.75 6.615 21.75 12 17.385 21.75 12 21.75z"/></svg>`;
+  const iconeWhats = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.528 5.855L.057 23.454a.75.75 0 0 0 .908.944l5.878-1.533A11.942 11.942 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.75a9.713 9.713 0 0 1-4.953-1.355l-.355-.21-3.673.958.993-3.53-.231-.364A9.712 9.712 0 0 1 2.25 12C2.25 6.615 6.615 2.25 12 2.25S21.75 6.615 21.75 12 17.385 21.75 12 21.75z"/></svg>`;
 
   const alunosHtml = Object.entries(porAluno)
     .sort((a, b) => b[1].total - a[1].total)
